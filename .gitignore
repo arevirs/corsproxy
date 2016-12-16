@@ -1,5 +1,6 @@
-target
-.settings/*
-!.settings/.jsdtscope
-.project
-.classpath
+*.swp
+*.tmp
+*.log
+
+coverage/
+node_modules/
