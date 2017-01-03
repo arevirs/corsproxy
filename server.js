@@ -1,6 +1,6 @@
 // Heroku defines the environment variable PORT, and requires the binding address to be 0.0.0.0
-var host = process.env.PORT ? '0.0.0.0' : '127.0.0.1';
-var port = process.env.PORT || 8080;
+var host = process.env.OPENSHIFT_NODEJS_IP || process.env.OPENSHIFT_INTERNAL_IP || process.env.IP || '0.0.0.0';
+var port = process.env.OPENSHIFT_NODEJS_PORT || process.env.OPENSHIFT_INTERNAL_PORT || process.env.PORT || 8080;
 
 // Grab the blacklist from the command-line so that we can update the blacklist without deploying
 // again. CORS Anywhere is open by design, and this blacklist is not used, except for countering
