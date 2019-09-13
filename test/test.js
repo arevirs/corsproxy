@@ -165,7 +165,7 @@ describe('Basic functionality', function() {
       .expect('x-final-url', 'http://example.com/redirecttarget')
       .expect('access-control-expose-headers', /some-header,x-final-url/)
       .expectNoHeader('header at redirect')
-      .expect(200, '', done);
+      .expect(200, undefined, done);
   });
 
   it('GET with redirect should be followed', function(done) {
@@ -332,6 +332,28 @@ describe('Proxy errors', function() {
     });
   });
 
+  var bad_status_http_server;
+  var bad_status_http_server_url;
+  before(function() {
+    bad_status_http_server = require('net').createServer(function(socket) {
+      socket.setEncoding('utf-8');
+      socket.on('data', function(data) {
+        if (data.indexOf('\r\n') >= 0) {
+          // Assume end of headers.
+          socket.write('HTTP/1.0 0\r\n');
+          socket.write('Content-Length: 0\r\n');
+          socket.end('\r\n');
+        }
+      });
+    });
+    bad_status_http_server_url = 'http://127.0.0.1:' + bad_status_http_server.listen(0).address().port;
+  });
+  after(function(done) {
+    bad_status_http_server.close(function() {
+      done();
+    });
+  });
+
   var bad_tcp_server;
   var bad_tcp_server_url;
   before(function() {
@@ -369,6 +391,27 @@ describe('Proxy errors', function() {
       .expect(404, 'Not found because of proxy error: Error: Parse Error', done);
   });
 
+  it('Invalid HTTP status code', function(done) {
+    // Strict HTTP status validation was introduced in Node 4.5.5+, 5.11.0+.
+    // https://github.com/nodejs/node/pull/6291
+    var nodev = process.versions.node.split('.').map(function(v) { return parseInt(v); });
+    if (nodev[0] < 4 ||
+        nodev[0] === 4 && nodev[1] < 5 ||
+        nodev[0] === 4 && nodev[1] === 5 && nodev[2] < 5 ||
+        nodev[0] === 5 && nodev[1] < 11) {
+      this.skip();
+    }
+
+    var errorMessage = 'RangeError [ERR_HTTP_INVALID_STATUS_CODE]: Invalid status code: 0';
+    if (parseInt(process.versions.node, 10) < 9) {
+      errorMessage = 'RangeError: Invalid status code: 0';
+    }
+    request(cors_anywhere)
+      .get('/' + bad_status_http_server_url)
+      .expect('Access-Control-Allow-Origin', '*')
+      .expect(404, 'Not found because of proxy error: ' + errorMessage, done);
+  });
+
   it('Content-Encoding invalid body', function(done) {
     // The HTTP status can't be changed because the headers have already been
     // sent.
@@ -376,6 +419,32 @@ describe('Proxy errors', function() {
       .get('/' + bad_tcp_server_url)
       .expect('Access-Control-Allow-Origin', '*')
       .expect(418, '', done);
+  });
+
+  it('Invalid header values', function(done) {
+    if (parseInt(process.versions.node, 10) < 6) {
+      // >=6.0.0: https://github.com/nodejs/node/commit/7bef1b790727430cb82bf8be80cfe058480de100
+      this.skip();
+    }
+    // >=9.0.0: https://github.com/nodejs/node/commit/11a2ca29babcb35132e7d93244b69c544d52dfe4
+    var errorMessage = 'TypeError [ERR_INVALID_CHAR]: Invalid character in header content ["headername"]';
+    if (parseInt(process.versions.node, 10) < 9) {
+      // >=6.0.0, <9.0.0: https://github.com/nodejs/node/commit/7bef1b790727430cb82bf8be80cfe058480de100
+      errorMessage = 'TypeError: The header content contains invalid characters';
+    }
+    stopServer(function() {
+      cors_anywhere = createServer({
+        // Setting an invalid header below in request(...).set(...) would trigger
+        // a header validation error in superagent. So we use setHeaders to test
+        // the attempt to proxy a request with invalid request headers.
+        setHeaders: {headername: 'invalid\x01value'},
+      });
+      cors_anywhere_port = cors_anywhere.listen(0).address().port;
+      request(cors_anywhere)
+        .get('/' + bad_tcp_server_url) // Any URL that isn't intercepted by Nock would do.
+        .expect('Access-Control-Allow-Origin', '*')
+        .expect(404, 'Not found because of proxy error: ' + errorMessage, done);
+    });
   });
 });
 
@@ -807,6 +876,58 @@ describe('setHeaders + removeHeaders', function() {
         host: 'example.com',
         'x-powered-by': 'CORS Anywhere',
       }, done);
+  });
+});
+
+describe('Access-Control-Max-Age set', function() {
+  before(function() {
+    cors_anywhere = createServer({
+      corsMaxAge: 600,
+    });
+    cors_anywhere_port = cors_anywhere.listen(0).address().port;
+  });
+  after(stopServer);
+
+  it('GET /', function(done) {
+    request(cors_anywhere)
+      .get('/')
+      .type('text/plain')
+      .expect('Access-Control-Allow-Origin', '*')
+      .expect('Access-Control-Max-Age', '600')
+      .expect(200, helpText, done);
+  });
+
+  it('GET /example.com', function(done) {
+    request(cors_anywhere)
+      .get('/example.com')
+      .expect('Access-Control-Allow-Origin', '*')
+      .expect('Access-Control-Max-Age', '600')
+      .expect(200, 'Response from example.com', done);
+  });
+});
+
+describe('Access-Control-Max-Age not set', function() {
+  before(function() {
+    cors_anywhere = createServer();
+    cors_anywhere_port = cors_anywhere.listen(0).address().port;
+  });
+  after(stopServer);
+
+  it('GET /', function(done) {
+    request(cors_anywhere)
+      .get('/')
+      .type('text/plain')
+      .expect('Access-Control-Allow-Origin', '*')
+      .expectNoHeader('Access-Control-Max-Age')
+      .expect(200, helpText, done);
+  });
+
+  it('GET /example.com', function(done) {
+    request(cors_anywhere)
+      .get('/example.com')
+      .expect('Access-Control-Allow-Origin', '*')
+      .expectNoHeader('Access-Control-Max-Age')
+      .expect(200, 'Response from example.com', done);
   });
 });
 

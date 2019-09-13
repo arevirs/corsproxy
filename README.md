@@ -15,8 +15,9 @@ a direct visit from the browser.
 ## Example
 
 ```javascript
-// Heroku defines the environment variable PORT, and requires the binding address to be 0.0.0.0
-var host = process.env.PORT ? '0.0.0.0' : '127.0.0.1';
+// Listen on a specific host via the HOST environment variable
+var host = process.env.HOST || '0.0.0.0';
+// Listen on a specific port via the PORT environment variable
 var port = process.env.PORT || 8080;
 
 var cors_proxy = require('cors-anywhere');
@@ -106,6 +107,8 @@ proxy requests. The following options are supported:
   Example: `["cookie"]`
 * dictionary of lowercase strings `setHeaders` - Set headers for the request (overwrites existing ones).  
   Example: `{"x-powered-by": "CORS Anywhere"}`
+* number `corsMaxAge` - If set, an Access-Control-Max-Age request header with this value (in seconds) will be added.  
+  Example: `600` - Allow CORS preflight request to be cached by the browser for 10 minutes.
 * string `helpFile` - Set the help file (shown at the homepage).  
   Example: `"myCustomHelpText.txt"`
 
