@@ -1,0 +1,7 @@
+{
+    "appService.zipIgnorePattern": [
+        ".vscode{,/**}"
+    ],
+    "appService.defaultWebAppToDeploy": "/subscriptions/d46ffe24-c669-4c55-97a7-14c4153efbfe/resourceGroups/appsvc_linux_centralus/providers/Microsoft.Web/sites/md-corsproxy-server",
+    "appService.deploySubpath": ""
+}
